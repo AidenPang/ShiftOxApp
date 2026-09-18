@@ -53,7 +53,7 @@ class FinancePage extends StatelessWidget {
       builder: (context, child) {
         int safeBudget = controller.dailySafeBudget;
         int projectedTotalMoney = controller.currentCash + controller.monthlyTotalSalary;
-        int remainingBudget = projectedTotalMoney - controller.monthlyTargetSavings - controller.monthlyTotalExpense;
+        int remainingBudget = projectedTotalMoney - controller.monthlyTargetSavings;
         bool isOverspent = remainingBudget <= 0; // 是否吃土
 
         return Scaffold(
@@ -69,7 +69,7 @@ class FinancePage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 現有資金與發薪水區塊
+                // 現有資金區塊
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -97,6 +97,7 @@ class FinancePage extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text("\$ ${controller.currentCash}", style: const TextStyle(color: Colors.white,fontSize: 40, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
+                      
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
@@ -105,7 +106,6 @@ class FinancePage extends StatelessWidget {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () async {
-                          // 點擊領取上個月薪水
                           String message = await controller.claimPreviousMonthSalary();
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));

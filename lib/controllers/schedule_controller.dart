@@ -115,112 +115,129 @@ class ScheduleController extends ChangeNotifier {
     await loadScheduleByDate(date);
   }
 
+  // ==========================================
+  // 💸 記帳功能 (支出與收入共用，徹底瘦身！)
+  // 💡 只要傳入 isIncome: true 就是記收入，false 就是記支出
+  // ==========================================
 
-  // 💸 記帳功能
-  Future<void> addSingleExpense({
+  Future<void> addTransaction({
     required String date,
     required String itemTitle,
     required int itemAmount,
+    required bool isIncome, 
   }) async {
-    // 💡 寫入前強制先去 SQLite 抓一次當天最新資料
     final dbSchedule = await _dbHelper.getScheduleByDate(date);
+    final existingPosition = dbSchedule?.position ?? currentSchedule?.position ?? "";
+    final existingStart = dbSchedule?.startTime ?? currentSchedule?.startTime ?? "";
+    final existingEnd = dbSchedule?.endTime ?? currentSchedule?.endTime ?? "";
 
-    // 1. 撈出當天原本就存在的舊工時排班數據
-    final String existingPosition = dbSchedule?.position ?? currentSchedule?.position ?? "";
-    final String existingStart = dbSchedule?.startTime ?? currentSchedule?.startTime ?? "";
-    final String existingEnd = dbSchedule?.endTime ?? currentSchedule?.endTime ?? "";
+    // 💡 根據 isIncome 決定要撈哪個清單
+    List<Map<String, dynamic>> currentList = isIncome 
+        ? (dbSchedule?.getIncomeList() ?? currentSchedule?.getIncomeList() ?? [])
+        : (dbSchedule?.getExpenseList() ?? currentSchedule?.getExpenseList() ?? []);
 
-    // 2. 撈出原本的記帳清單明細
-    List<Map<String, dynamic>> currentExpenses = dbSchedule?.getExpenseList() ?? currentSchedule?.getExpenseList() ?? [];
-
-    // 3. 把新記的這一筆消費「加進去」
-    currentExpenses.add({
-      'title': itemTitle.isEmpty ? '未命名消費' : itemTitle,
+    currentList.add({
+      'title': itemTitle.isEmpty ? '未命名' : itemTitle,
       'amount': itemAmount,
     });
 
-    // 4. 🔥 自動加總計算當天總金額！
-    int totalAmount = 0;
-    for (var item in currentExpenses) {
-      totalAmount += (item['amount'] as int);
-    }
+    int totalAmount = currentList.fold(0, (sum, item) => sum + (item['amount'] as int));
+    String jsonNoteString = jsonEncode(currentList);
 
-    // 5. 將明細陣列轉換為 JSON 字串存進資料庫
-    String jsonNoteString = jsonEncode(currentExpenses);
-
-    // 把畫面輸入的零散資料，打包成一隻 Model 物件
-   final updatedSchedule = ScheduleModel(
+    // 💡 根據 isIncome 決定要更新哪個欄位，另一個欄位保留舊值
+    final updatedSchedule = ScheduleModel(
       date: date,
       position: existingPosition,
       startTime: existingStart,
       endTime: existingEnd,
-      expenseAmount: totalAmount, // 儲存加總後的總額
-      expenseNote: jsonNoteString, // 儲存序列化明細
+      expenseAmount: isIncome ? (dbSchedule?.expenseAmount ?? 0) : totalAmount,
+      expenseNote: isIncome ? (dbSchedule?.expenseNote ?? "[]") : jsonNoteString,
+      incomeAmount: isIncome ? totalAmount : (dbSchedule?.incomeAmount ?? 0),
+      incomeNote: isIncome ? jsonNoteString : (dbSchedule?.incomeNote ?? "[]"),
     );
 
-    // 叫 Model 層寫入 SQLite
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
-
-    // 儲存完後，重新載入當天資料，確保畫面上的數據是最新的
     await loadScheduleByDate(date);
+
+    // 💡 連動錢包：收入加錢，支出扣錢
+    await adjustCurrentCash(isIncome ? itemAmount : -itemAmount);
   }
 
-  // ✏️ 修改單筆消費
-  Future<void> editSingleExpense({
+  // ✏️ 修改單筆明細 (共用)
+  Future<void> editTransaction({
     required String date,
     required int index,
     required String newTitle,
     required int newAmount,
+    required bool isIncome,
   }) async {
     final schedule = await _dbHelper.getScheduleByDate(date);
     if (schedule == null) return;
 
-    List<Map<String, dynamic>> currentExpenses = schedule.getExpenseList();
-    if (index < 0 || index >= currentExpenses.length) return;
+    List<Map<String, dynamic>> currentList = isIncome ? schedule.getIncomeList() : schedule.getExpenseList();
+    if (index < 0 || index >= currentList.length) return;
 
-    currentExpenses[index] = {'title': newTitle, 'amount': newAmount};
+    int oldAmount = currentList[index]['amount'] as int;
+    currentList[index] = {'title': newTitle, 'amount': newAmount};
 
-    int totalAmount = currentExpenses.fold(0, (sum, item) => sum + (item['amount'] as int));
-    String jsonNoteString = jsonEncode(currentExpenses);
+    int totalAmount = currentList.fold(0, (sum, item) => sum + (item['amount'] as int));
+    String jsonNoteString = jsonEncode(currentList);
 
     final updatedSchedule = ScheduleModel(
       date: date,
       position: schedule.position,
       startTime: schedule.startTime,
       endTime: schedule.endTime,
-      expenseAmount: totalAmount,
-      expenseNote: jsonNoteString,
+      expenseAmount: isIncome ? schedule.expenseAmount : totalAmount,
+      expenseNote: isIncome ? schedule.expenseNote : jsonNoteString,
+      incomeAmount: isIncome ? totalAmount : schedule.incomeAmount,
+      incomeNote: isIncome ? jsonNoteString : schedule.incomeNote,
     );
 
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
     await loadScheduleByDate(date);
+
+    // 💡 計算差額補退：收入(新-舊)，支出(舊-新)
+    int difference = isIncome ? (newAmount - oldAmount) : (oldAmount - newAmount); 
+    await adjustCurrentCash(difference);
   }
 
-  // 🗑️ 刪除單筆消費
-  Future<void> deleteSingleExpense({required String date, required int index}) async {
+  // 🗑️ 刪除單筆明細 (共用)
+  Future<void> deleteTransaction({
+    required String date, 
+    required int index,
+    required bool isIncome,
+  }) async {
     final schedule = await _dbHelper.getScheduleByDate(date);
     if (schedule == null) return;
 
-    List<Map<String, dynamic>> currentExpenses = schedule.getExpenseList();
-    if (index < 0 || index >= currentExpenses.length) return;
+    List<Map<String, dynamic>> currentList = isIncome ? schedule.getIncomeList() : schedule.getExpenseList();
+    if (index < 0 || index >= currentList.length) return;
 
-    currentExpenses.removeAt(index);
+    int deletedAmount = currentList[index]['amount'] as int;
+    currentList.removeAt(index);
 
-    int totalAmount = currentExpenses.fold(0, (sum, item) => sum + (item['amount'] as int));
-    String jsonNoteString = jsonEncode(currentExpenses);
+    int totalAmount = currentList.fold(0, (sum, item) => sum + (item['amount'] as int));
+    String jsonNoteString = jsonEncode(currentList);
 
     final updatedSchedule = ScheduleModel(
       date: date,
       position: schedule.position,
       startTime: schedule.startTime,
       endTime: schedule.endTime,
-      expenseAmount: totalAmount,
-      expenseNote: jsonNoteString,
+      expenseAmount: isIncome ? schedule.expenseAmount : totalAmount,
+      expenseNote: isIncome ? schedule.expenseNote : jsonNoteString,
+      incomeAmount: isIncome ? totalAmount : schedule.incomeAmount,
+      incomeNote: isIncome ? jsonNoteString : schedule.incomeNote,
     );
 
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
     await loadScheduleByDate(date);
+    
+    // 💡 刪除時：收入扣除，支出退回
+    await adjustCurrentCash(isIncome ? -deletedAmount : deletedAmount);
   }
+  
 
   // ==========================================
   // 🔥🔥🔥 階段二核心：AI 拍照/選相簿 ＆ 班表識別 
@@ -290,7 +307,7 @@ class ScheduleController extends ChangeNotifier {
   // 💰 理財戰情室：學費與生存配速邏輯
   // ==========================================
   
-  int _monthlyTargetSavings = 15000; // 預設每月預留學費/存錢額度
+  int _monthlyTargetSavings = 10000; // 預設每月預留學費/存錢額度
   int get monthlyTargetSavings => _monthlyTargetSavings;
 
   // 現有資金水位 (手上有多少錢)
@@ -303,7 +320,7 @@ class ScheduleController extends ChangeNotifier {
   // 📖 讀取存錢目標
   Future<void> loadTargetSavings() async {
     final prefs = await SharedPreferences.getInstance();
-    _monthlyTargetSavings = prefs.getInt('monthlyTarget') ?? 15000;
+    _monthlyTargetSavings = prefs.getInt('monthlyTarget') ?? 10000;
     _currentCash = prefs.getInt('currentCash') ?? 0;
     _claimedMonths = prefs.getStringList('claimedMonths') ?? [];
     notifyListeners(); // 刷新畫面
@@ -365,9 +382,8 @@ class ScheduleController extends ChangeNotifier {
 
   // 🧮 計算「今日伙食安全額度」
   int get dailySafeBudget {
-    // 1. 本月可用餘額 = 預估總薪水 - 學費預留 - 目前已經花掉的總額
     int projectedTotalMoney = _currentCash + monthlyTotalSalary;
-    int remainingBudget = projectedTotalMoney - _monthlyTargetSavings - monthlyTotalExpense;
+    int remainingBudget = projectedTotalMoney - _monthlyTargetSavings;
     
     // 如果餘額已經被扣光，代表透支，今天只能吃土（0元）
     if (remainingBudget <= 0) return 0; 
@@ -379,5 +395,13 @@ class ScheduleController extends ChangeNotifier {
 
     // 3. 安全額度 = 餘額 / 剩餘天數 (無條件捨去)
     return (remainingBudget / remainingDays).floor();
+  }
+
+  // 錢包自動連動：扣款與退款機制
+  Future<void> adjustCurrentCash(int amountDifference) async {
+    final prefs = await SharedPreferences.getInstance();
+    _currentCash += amountDifference; // 傳入負數就是扣錢，正數就是退錢
+    await prefs.setInt('currentCash', _currentCash);
+    notifyListeners();
   }
 }

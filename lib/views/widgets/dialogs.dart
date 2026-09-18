@@ -72,8 +72,16 @@ class ExpenseDialog extends StatefulWidget {
   final String dateStr;
   final Map<String, dynamic>? existingExpense;
   final int? expenseIndex;
+  final bool isEditingIncome;
 
-  const ExpenseDialog({super.key, required this.controller, required this.dateStr, this.existingExpense, this.expenseIndex});
+  const ExpenseDialog({
+    super.key, 
+    required this.controller, 
+    required this.dateStr, 
+    this.existingExpense, 
+    this.expenseIndex,
+    this.isEditingIncome = false,
+  });
 
   @override
   State<ExpenseDialog> createState() => _ExpenseDialogState();
@@ -82,12 +90,14 @@ class ExpenseDialog extends StatefulWidget {
 class _ExpenseDialogState extends State<ExpenseDialog> {
   late final TextEditingController itemController;
   late final TextEditingController amountController;
+  late bool _isIncome; // 用來記錄現在使用者選的是收入還是支出
 
   @override
   void initState() {
     super.initState();
     itemController = TextEditingController(text: widget.existingExpense?['title'] as String? ?? '');
     amountController = TextEditingController(text: widget.existingExpense?['amount']?.toString() ?? '');
+    _isIncome = widget.isEditingIncome;
   }
 
   @override
@@ -99,18 +109,52 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
 
   @override
   Widget build(BuildContext context) {
+    bool isEditing = widget.existingExpense != null;
     return AlertDialog(
       title: Text(
-        widget.existingExpense == null ? "💸 新增消費明細 - ${widget.dateStr}" : "✏️ 修改消費明細",
+        isEditing 
+          ? (_isIncome ? "✏️ 修改收入明細" : "✏️ 修改支出明細")
+          : "📝 新增帳務明細 - ${widget.dateStr}",
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(controller: itemController, decoration: const InputDecoration(labelText: "消費項目 (如：午餐、買飲料)")),
+          if (!isEditing)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ChoiceChip(
+                  label: const Text("支出 💸"),
+                  selected: !_isIncome,
+                  onSelected: (selected) {
+                    setState(() => _isIncome = false);
+                  },
+                  selectedColor: Colors.redAccent.withValues(alpha: 0.2),
+                ),
+                const SizedBox(width: 16),
+                ChoiceChip(
+                  label: const Text("收入 🤑"),
+                  selected: _isIncome,
+                  onSelected: (selected) {
+                    setState(() => _isIncome = true);
+                  },
+                  selectedColor: Colors.greenAccent.withValues(alpha: 0.2),
+                ),
+              ],
+            ),
+          if (!isEditing) const SizedBox(height: 16),
+
+          TextField(
+            controller: itemController, 
+            decoration: InputDecoration(
+              // 💡 提示文字會跟著切換
+              labelText: _isIncome ? "收入來源 (如：賣二手書、零用錢)" : "消費項目 (如：午餐、買飲料)"
+            )
+          ),
           TextField(
             controller: amountController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: "消費金額", prefixText: "\$ "),
+            decoration: const InputDecoration(labelText: "金額", prefixText: "\$ "),
           ),
         ],
       ),
@@ -123,18 +167,20 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
 
               if (widget.expenseIndex != null) {
                 // 修改模式
-                await widget.controller.editSingleExpense(
+                await widget.controller.editTransaction(
                   date: widget.dateStr,
                   index: widget.expenseIndex!,
                   newTitle: title,
                   newAmount: amount,
+                  isIncome: _isIncome,
                 );
               } else {
                 // 新增模式
-                await widget.controller.addSingleExpense(
+                await widget.controller.addTransaction(
                   date: widget.dateStr,
                   itemTitle: title,
                   itemAmount: amount,
+                  isIncome: _isIncome,
                 );
               }
             if (context.mounted) Navigator.pop(context);

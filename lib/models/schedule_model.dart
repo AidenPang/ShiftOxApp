@@ -7,25 +7,31 @@ class ScheduleModel {
   final String endTime;        // 下班時間 (格式：HH:mm) 
   final int expenseAmount;     // 當日消費記帳總額（自動加總後的結果）
   final String expenseNote;    // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
+  final int incomeAmount;      // 當日進帳總額（自動加總後的結果）
+  final String incomeNote;     // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
 
   ScheduleModel({
     required this.date,
     required this.position,
     required this.startTime,
     required this.endTime,
-    required this.expenseAmount,
-    required this.expenseNote,
+    this.expenseAmount = 0,
+    this.expenseNote = "[]",
+    this.incomeAmount = 0,    
+    this.incomeNote = "[]",  
   });
 
   // 📥 將資料庫查出來的 Map 轉換成 Dart 物件
   factory ScheduleModel.fromMap(Map<String, dynamic> map) {
     return ScheduleModel(
-      date: map['date'] ?? '',
-      position: map['position'] ?? '',
-      startTime: map['start_time'] ?? '',
-      endTime: map['end_time'] ?? '',
-      expenseAmount: map['expense_amount'] ?? 0,
-      expenseNote: map['expense_note'] ?? '',
+      date: map['date'] as String,
+      position: map['position'] as String,
+      startTime: map['start_time'] as String,
+      endTime: map['end_time'] as String,
+      expenseAmount: map['expense_amount'] as int? ?? 0,
+      expenseNote: map['expense_note'] as String? ?? "[]",
+      incomeAmount: map['income_amount'] as int? ?? 0, 
+      incomeNote: map['income_note'] as String? ?? "[]",
     );
   }
 
@@ -38,6 +44,8 @@ class ScheduleModel {
       'end_time': endTime,
       'expense_amount': expenseAmount,
       'expense_note': expenseNote,
+      'income_amount': incomeAmount, 
+      'income_note': incomeNote,
     };
   }
 
@@ -54,6 +62,15 @@ class ScheduleModel {
     try {
       List<dynamic> decoded = jsonDecode(expenseNote);
       return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 💡 新增：解析收入 JSON
+  List<Map<String, dynamic>> getIncomeList() {
+    try {
+      return List<Map<String, dynamic>>.from(jsonDecode(incomeNote));
     } catch (e) {
       return [];
     }

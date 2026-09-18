@@ -17,7 +17,21 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path, 
+      version: 2, 
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  // 平滑升級機制，保護手機裡的舊資料！
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // 偵測到手機裡是舊版 (v1)，自動幫 schedules 表格擴建兩個收入欄位
+      await db.execute("ALTER TABLE schedules ADD COLUMN income_amount INTEGER DEFAULT 0");
+      await db.execute("ALTER TABLE schedules ADD COLUMN income_note TEXT DEFAULT '[]'");
+    }
   }
 
   // 🛠️ 嚴格依據計劃書的「三、 本地資料庫設計 (SQLite Schema)」建表 [cite: 18]
@@ -29,7 +43,9 @@ class DatabaseHelper {
         start_time TEXT,
         end_time TEXT,
         expense_amount INTEGER,
-        expense_note TEXT
+        expense_note TEXT,
+        income_amount INTEGER DEFAULT 0,
+        income_note TEXT DEFAULT '[]'
       )
     ''');
 
@@ -40,7 +56,7 @@ class DatabaseHelper {
         value TEXT
       )
     ''');
-    await db.insert('settings', {'key': 'hourly_wage', 'value': '180'});
+    await db.insert('settings', {'key': 'hourly_wage', 'value': '196'});
   }
 
   // 💾 寫入或更新當天資料
@@ -90,9 +106,9 @@ class DatabaseHelper {
       whereArgs: ['hourly_wage'],
     );
     if (maps.isNotEmpty) {
-      return int.tryParse(maps.first['value']?.toString() ?? '180') ?? 180;
+      return int.tryParse(maps.first['value']?.toString() ?? '196') ?? 196;
     }
-    return 180;
+    return 196;
   }
 
   // 💰 設定時薪

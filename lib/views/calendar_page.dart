@@ -65,6 +65,8 @@ class _CalendarPageState extends State<CalendarPage> {
             String endTime = schedule?.endTime.isNotEmpty == true ? schedule!.endTime : "--:--";
             int expenseAmount = schedule?.expenseAmount ?? 0;
             List<Map<String, dynamic>> expenseList = schedule?.getExpenseList() ?? [];
+            int incomeAmount = schedule?.incomeAmount ?? 0;
+            List<Map<String, dynamic>> incomeList = schedule?.getIncomeList() ?? [];
 
             double todayHours = _controller.calculateHours(startTime, endTime);
             int todaySalary = (todayHours * _controller.hourlyWage).round();
@@ -189,14 +191,15 @@ class _CalendarPageState extends State<CalendarPage> {
                                           date: dateString,
                                           expenses: expenses,
                                           onDelete: (index) async {
-                                            await _controller.deleteSingleExpense(date: dateString, index: index);
+                                            await _controller.deleteTransaction(date: dateString, index: index, isIncome: false,);
                                           },
                                           onEdit: (index, newTitle, newAmount) async {
-                                            await _controller.editSingleExpense(
+                                            await _controller.editTransaction(
                                               date: dateString,
                                               index: index,
                                               newTitle: newTitle,
                                               newAmount: newAmount,
+                                              isIncome: false,
                                             );
                                           },
                                         ),
@@ -211,6 +214,64 @@ class _CalendarPageState extends State<CalendarPage> {
                                   ),
                                 ],
                               ),
+                              if (incomeList.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                GestureDetector(
+                                  onTap: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) => ExpenseListBottomSheet(
+                                        date: dateString,
+                                        expenses: incomeList,
+                                        onDelete: (index) async => await _controller.deleteTransaction(date: dateString, index: index, isIncome: true),
+                                        onEdit: (index, newTitle, newAmount) async => await _controller.editTransaction(date: dateString, index: index, newTitle: newTitle, newAmount: newAmount, isIncome: true),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withAlpha(25), // 淡淡的綠色背景
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: Colors.green.withAlpha(70)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("🤑 今日額外進帳", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
+                                            Text("+\$ $incomeAmount", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                                          ],
+                                        ),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                                          child: Divider(color: Colors.green, height: 1, thickness: 0.3),
+                                        ),
+                                        // 展開顯示所有的收入明細
+                                        ...incomeList.map((item) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 4.0),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text("• ${item['title']}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                                              Text("+\$ ${item['amount']}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                                            ],
+                                          ),
+                                        )),
+                                        const SizedBox(height: 4),
+                                        const Align(
+                                          alignment: Alignment.centerRight,
+                                          child: Text("點擊修改 ❯", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ]
                             ],
                           ),
                         ),
