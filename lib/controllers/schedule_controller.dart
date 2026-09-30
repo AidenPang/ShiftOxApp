@@ -382,8 +382,7 @@ class ScheduleController extends ChangeNotifier {
 
   // 🧮 計算「今日伙食安全額度」
   int get dailySafeBudget {
-    int projectedTotalMoney = _currentCash + monthlyTotalSalary;
-    int remainingBudget = projectedTotalMoney - _monthlyTargetSavings;
+    int remainingBudget = _currentCash - _monthlyTargetSavings;
     
     // 如果餘額已經被扣光，代表透支，今天只能吃土（0元）
     if (remainingBudget <= 0) return 0; 

@@ -52,7 +52,7 @@ class FinancePage extends StatelessWidget {
       listenable: controller,
       builder: (context, child) {
         int safeBudget = controller.dailySafeBudget;
-        int projectedTotalMoney = controller.currentCash + controller.monthlyTotalSalary;
+        int projectedTotalMoney = controller.currentCash;
         int remainingBudget = projectedTotalMoney - controller.monthlyTargetSavings;
         bool isOverspent = remainingBudget <= 0; // 是否吃土
 
@@ -165,9 +165,9 @@ class FinancePage extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text("\$ $safeBudget", style: TextStyle(color: isOverspent ? Colors.redAccent : Colors.greenAccent, fontSize: 40, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
-                      // 💡 說明公式：(現有資金 + 本月預估薪水) - 目標 - 已花費 = 剩餘可支配
-                      Text("總資金池 (\$ $projectedTotalMoney)扣除目標與開銷後", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("本月剩餘可支配：\$ $remainingBudget", style: TextStyle(color: isOverspent ? Colors.redAccent : Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+                      // 💡 說明公式：現有資金 - 目標 - 已花費 = 剩餘可支配
+                      Text("手頭現金 (\$ $projectedTotalMoney)扣除目標與開銷後", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      Text("本月剩餘可支配現金：\$ $remainingBudget", style: TextStyle(color: isOverspent ? Colors.redAccent : Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),

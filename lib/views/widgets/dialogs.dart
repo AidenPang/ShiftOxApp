@@ -91,6 +91,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
   late final TextEditingController itemController;
   late final TextEditingController amountController;
   late bool _isIncome; // 用來記錄現在使用者選的是收入還是支出
+  final FocusNode _amountFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -111,6 +112,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
   Widget build(BuildContext context) {
     bool isEditing = widget.existingExpense != null;
     return AlertDialog(
+      scrollable: true,
       title: Text(
         isEditing 
           ? (_isIncome ? "✏️ 修改收入明細" : "✏️ 修改支出明細")
@@ -146,6 +148,10 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
 
           TextField(
             controller: itemController, 
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_){
+              FocusScope.of(context).requestFocus(_amountFocusNode);
+            },
             decoration: InputDecoration(
               // 💡 提示文字會跟著切換
               labelText: _isIncome ? "收入來源 (如：賣二手書、零用錢)" : "消費項目 (如：午餐、買飲料)"
