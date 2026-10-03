@@ -19,7 +19,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return await openDatabase(
       path, 
-      version: 2, 
+      version: 3, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -29,8 +29,20 @@ class DatabaseHelper {
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // 偵測到手機裡是舊版 (v1)，自動幫 schedules 表格擴建兩個收入欄位
-      await db.execute("ALTER TABLE schedules ADD COLUMN income_amount INTEGER DEFAULT 0");
-      await db.execute("ALTER TABLE schedules ADD COLUMN income_note TEXT DEFAULT '[]'");
+      try {
+        await db.execute("ALTER TABLE schedules ADD COLUMN income_amount INTEGER DEFAULT 0");
+        await db.execute("ALTER TABLE schedules ADD COLUMN income_note TEXT DEFAULT '[]'");
+      } catch (e) {
+        print("收入欄位擴建略過：$e");
+      }
+    }
+    // 加上擴建排班 JSON 欄位的防彈邏輯
+    if (oldVersion < 3) {
+      try {
+        await db.execute("ALTER TABLE schedules ADD COLUMN shifts_note TEXT DEFAULT '[]'");
+      } catch (e) {
+        print("排班欄位擴建略過：$e");
+      }
     }
   }
 
@@ -46,6 +58,7 @@ class DatabaseHelper {
         expense_note TEXT,
         income_amount INTEGER DEFAULT 0,
         income_note TEXT DEFAULT '[]'
+        shifts_note TEXT DEFAULT '[]'
       )
     ''');
 

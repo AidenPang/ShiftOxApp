@@ -9,7 +9,7 @@ class AIService {
   /// 📸 核心任務：將傳入的圖片 Byte 送給 Gemini，解析出該日期「定」的班表
   Future<List<Map<String, dynamic>>> scanScheduleImage(Uint8List imageBytes, String targetYear) async {
     try {
-      // 1. 初始化 Gemini 1.5 Flash 引擎
+      // 1. 初始化 Gemini 3.5 Flash 引擎
       final model = GenerativeModel(
         model: 'gemini-3.5-flash', 
         apiKey: _geminiApiKey,

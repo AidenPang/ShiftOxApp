@@ -60,15 +60,17 @@ class _CalendarPageState extends State<CalendarPage> {
             String dateString = _formatDate(_selectedDay);
             ScheduleModel? schedule = _controller.currentSchedule;
 
-            String position = schedule?.position.isNotEmpty == true ? schedule!.position : "今天放假！休息吧牛馬";
-            String startTime = schedule?.startTime.isNotEmpty == true ? schedule!.startTime : "--:--";
-            String endTime = schedule?.endTime.isNotEmpty == true ? schedule!.endTime : "--:--";
+            // 1. 抓取新的「多重排班」陣列 (取代原本的 position, startTime, endTime)
+            List<Map<String, dynamic>> shiftList = schedule?.getShiftsList() ?? [];
+
+            // 2. 收支部分維持你的原樣
             int expenseAmount = schedule?.expenseAmount ?? 0;
             List<Map<String, dynamic>> expenseList = schedule?.getExpenseList() ?? [];
             int incomeAmount = schedule?.incomeAmount ?? 0;
             List<Map<String, dynamic>> incomeList = schedule?.getIncomeList() ?? [];
 
-            double todayHours = _controller.calculateHours(startTime, endTime);
+            // 3. 改用新方法：加總今天「所有」班表的時數
+            double todayHours = _controller.getDailyTotalHours(schedule);
             int todaySalary = (todayHours * _controller.hourlyWage).round();
 
             return Scaffold(
@@ -167,9 +169,61 @@ class _CalendarPageState extends State<CalendarPage> {
                             children: [
                               Text("📅 日期：$dateString", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                               const SizedBox(height: 4),
-                              Text("🏃‍♂️ 今日崗位：$position", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text("⏰ 工時時段：$startTime ~ $endTime", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                              if (shiftList.isEmpty)
+                                const Text("🏃‍♂️ 今天放假！休息吧牛馬", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+                              else
+                                ...shiftList.asMap().entries.map((entry) {
+                                  int index = entry.key;
+                                  var shift = entry.value;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      // 點擊班表卡片，直接開啟「修改模式」的彈窗
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => WorkShiftDialog(
+                                          controller: _controller,
+                                          dateStr: dateString,
+                                          existingShift: shift,
+                                          shiftIndex: index,
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text("🏃‍♂️ 崗位：${shift['position']}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 4),
+                                              Text("⏰ ${shift['start_time']} ~ ${shift['end_time']}", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.edit, size: 18, color: Colors.grey),
+                                              const SizedBox(width: 12),
+                                              // 💡 加上刪除按鈕
+                                              GestureDetector(
+                                                onTap: () async {
+                                                  await _controller.deleteWorkShift(date: dateString, index: index);
+                                                },
+                                                child: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
                               const SizedBox(height: 12),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -315,10 +369,10 @@ class _CalendarPageState extends State<CalendarPage> {
                           ),
                           onPressed: () => showDialog(
                             context: context,
-                            builder: (context) => WorkShiftDialog(controller: _controller, dateStr: dateString, existingSchedule: schedule),
+                            builder: (context) => WorkShiftDialog(controller: _controller, dateStr: dateString),
                           ),
                           icon: const Icon(Icons.access_time, color: Colors.black),
-                          label: const Text("修改工時", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          label: const Text("新增工時", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 12),

@@ -1,30 +1,38 @@
 import 'package:flutter/material.dart';
 import '../../controllers/schedule_controller.dart';
-import '../../models/schedule_model.dart';
 
 /// 彈窗一：修改工時排班
 class WorkShiftDialog extends StatefulWidget {
   final ScheduleController controller;
   final String dateStr;
-  final ScheduleModel? existingSchedule;
+  final Map<String, dynamic>? existingShift; // 💡 改成接收單一班表的 Map
+  final int? shiftIndex;                     // 💡 接收班表在陣列中的索引
 
-  const WorkShiftDialog({super.key, required this.controller, required this.dateStr, this.existingSchedule});
+  const WorkShiftDialog({
+    super.key, 
+    required this.controller, 
+    required this.dateStr, 
+    this.existingShift,
+    this.shiftIndex,
+  });
 
   @override
   State<WorkShiftDialog> createState() => _WorkShiftDialogState();
 }
 
 class _WorkShiftDialogState extends State<WorkShiftDialog> {
-  late final TextEditingController posController;
-  late final TextEditingController startController;
-  late final TextEditingController endController;
+  final TextEditingController posController = TextEditingController();
+  final TextEditingController startController = TextEditingController();
+  final TextEditingController endController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    posController = TextEditingController(text: widget.existingSchedule?.position ?? "");
-    startController = TextEditingController(text: widget.existingSchedule?.startTime ?? "");
-    endController = TextEditingController(text: widget.existingSchedule?.endTime ?? "");
+    if (widget.existingShift != null) {
+      posController.text = widget.existingShift!['position']?.toString() ?? "";
+      startController.text = widget.existingShift!['start_time']?.toString() ?? "";
+      endController.text = widget.existingShift!['end_time']?.toString() ?? "";
+    }
   }
 
   @override
@@ -37,6 +45,7 @@ class _WorkShiftDialogState extends State<WorkShiftDialog> {
 
   @override
   Widget build(BuildContext context) {
+    bool isEditing = widget.existingShift != null;
     return AlertDialog(
       title: Text("⏰ 修改工時排班 - ${widget.dateStr}"),
       content: Column(
@@ -51,15 +60,27 @@ class _WorkShiftDialogState extends State<WorkShiftDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("取消")),
         ElevatedButton(
           onPressed: () async {
-            await widget.controller.updateWorkShift(
-              date: widget.dateStr,
-              position: posController.text.trim(),
-              startTime: startController.text.trim(),
-              endTime: endController.text.trim(),
-            );
+            if (isEditing) {
+              // 💡 呼叫新的修改方法
+              await widget.controller.editWorkShift(
+                date: widget.dateStr,
+                index: widget.shiftIndex!,
+                newPosition: posController.text.trim(),
+                newStart: startController.text.trim(),
+                newEnd: endController.text.trim(),
+              );
+            } else {
+              // 💡 呼叫新的新增方法
+              await widget.controller.addWorkShift(
+                date: widget.dateStr,
+                position: posController.text.trim(),
+                startTime: startController.text.trim(),
+                endTime: endController.text.trim(),
+              );
+            }
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text("儲存工時"),
+          child: Text(isEditing ? "儲存修改" : "確認新增"),
         ),
       ],
     );
@@ -159,6 +180,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
           ),
           TextField(
             controller: amountController,
+            focusNode: _amountFocusNode,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: "金額", prefixText: "\$ "),
           ),

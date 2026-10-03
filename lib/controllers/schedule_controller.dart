@@ -29,7 +29,6 @@ class ScheduleController extends ChangeNotifier {
 
   // 🔍 核心邏輯：去本地資料庫抓特定日期的資料
   Future<void> loadScheduleByDate(String date) async {
-    
     // 讀取時薪與當日資料
     hourlyWage = await _dbHelper.getHourlyWage();
     currentSchedule = await _dbHelper.getScheduleByDate(date);
@@ -71,49 +70,126 @@ class ScheduleController extends ChangeNotifier {
   // 📊 核心運算：計算整個月的薪資與記帳加總 
   Future<void> calculateMonthlyStats(String yearMonth) async {
     final List<ScheduleModel> monthlySchedules = await _dbHelper.getSchedulesByMonth(yearMonth);
-    
     double totalHours = 0.0;
     int totalExpense = 0;
 
     for (var schedule in monthlySchedules) {
       // 1. 累加工時 
-      double hours = calculateHours(schedule.startTime, schedule.endTime);
+      double hours = getDailyTotalHours(schedule);
       totalHours += hours;
-
       // 2. 累加記帳
       totalExpense += schedule.expenseAmount;
     }
-
     // 3. 預估薪資 = 總工時 * 時薪 
     monthlyTotalSalary = (totalHours * hourlyWage).round();
     monthlyTotalExpense = totalExpense;
   }
 
-  // ⏰ 更新工時排班
-  Future<void> updateWorkShift({
+  //  1. 取得單日「所有排班」的總工時
+  double getDailyTotalHours(ScheduleModel? schedule) {
+    if (schedule == null) return 0.0;
+    List<Map<String, dynamic>> shifts = schedule.getShiftsList();
+    double totalHours = 0.0;
+    for (var shift in shifts) {
+      totalHours += calculateHours(shift['start_time'] ?? '', shift['end_time'] ?? '');
+    }
+    return totalHours;
+  }
+
+  // 💡 2. 新增單筆排班 (存入 JSON 陣列)
+  Future<void> addWorkShift({
     required String date,
     required String position,
     required String startTime,
     required String endTime,
   }) async {
-    // 💡 防呆：如果原本這天就已經有記帳數據，要保留它，不要被覆蓋成空值
-    final int existingExpense = currentSchedule?.expenseAmount ?? 0;
-    final String existingNote = currentSchedule?.expenseNote ?? "";
-    // 把畫面輸入的零散資料，打包成一隻 Model 物件
-    final updatedSchedule = ScheduleModel(
-      date: date,
-      position: position,
-      startTime: startTime,
-      endTime: endTime,
-      expenseAmount: existingExpense,
-      expenseNote: existingNote,
-    );
-
-    // 叫 Model 層寫入 SQLite
-    await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
-    // 儲存完後，重新載入當天資料，確保畫面上的數據是最新的
     await loadScheduleByDate(date);
+    ScheduleModel schedule = currentSchedule ?? ScheduleModel(date: date, position: "", startTime: "", endTime: "");
+
+    List<Map<String, dynamic>> shifts = schedule.getShiftsList();
+    shifts.add({
+      'position': position,
+      'start_time': startTime,
+      'end_time': endTime,
+    });
+
+    await DatabaseHelper.instance.insertOrUpdateSchedule(
+      ScheduleModel(
+        date: date,
+        position: "", 
+        startTime: "",
+        endTime: "",
+        expenseAmount: schedule.expenseAmount,
+        expenseNote: schedule.expenseNote,
+        incomeAmount: schedule.incomeAmount,
+        incomeNote: schedule.incomeNote,
+        shiftsNote: jsonEncode(shifts), // 🚀 寫入新的陣列
+      )
+    );
+    await loadScheduleByDate(date);
+    await calculateMonthlyStats(date.substring(0, 7));
   }
+
+  // 💡 3. 修改單筆排班
+  Future<void> editWorkShift({
+    required String date,
+    required int index,
+    required String newPosition,
+    required String newStart,
+    required String newEnd,
+  }) async {
+    await loadScheduleByDate(date);
+    if (currentSchedule == null) return;
+
+    List<Map<String, dynamic>> shifts = currentSchedule!.getShiftsList();
+    if (index >= 0 && index < shifts.length) {
+      shifts[index] = {'position': newPosition, 'start_time': newStart, 'end_time': newEnd};
+
+      await DatabaseHelper.instance.insertOrUpdateSchedule(
+        ScheduleModel(
+          date: date,
+          position: "",
+          startTime: "",
+          endTime: "",
+          expenseAmount: currentSchedule!.expenseAmount,
+          expenseNote: currentSchedule!.expenseNote,
+          incomeAmount: currentSchedule!.incomeAmount,
+          incomeNote: currentSchedule!.incomeNote,
+          shiftsNote: jsonEncode(shifts),
+        )
+      );
+      await loadScheduleByDate(date);
+      await calculateMonthlyStats(date.substring(0, 7));
+    }
+  }
+
+  // 💡 4. 刪除單筆排班
+  Future<void> deleteWorkShift({required String date, required int index}) async {
+    await loadScheduleByDate(date);
+    if (currentSchedule == null) return;
+
+    List<Map<String, dynamic>> shifts = currentSchedule!.getShiftsList();
+    if (index >= 0 && index < shifts.length) {
+      shifts.removeAt(index);
+
+      await DatabaseHelper.instance.insertOrUpdateSchedule(
+        ScheduleModel(
+          date: date,
+          position: "",
+          startTime: "",
+          endTime: "",
+          expenseAmount: currentSchedule!.expenseAmount,
+          expenseNote: currentSchedule!.expenseNote,
+          incomeAmount: currentSchedule!.incomeAmount,
+          incomeNote: currentSchedule!.incomeNote,
+          shiftsNote: jsonEncode(shifts),
+        )
+      );
+      await loadScheduleByDate(date);
+      await calculateMonthlyStats(date.substring(0, 7));
+    }
+  }
+
 
   // ==========================================
   // 💸 記帳功能 (支出與收入共用，徹底瘦身！)
@@ -127,10 +203,7 @@ class ScheduleController extends ChangeNotifier {
     required bool isIncome, 
   }) async {
     final dbSchedule = await _dbHelper.getScheduleByDate(date);
-    final existingPosition = dbSchedule?.position ?? currentSchedule?.position ?? "";
-    final existingStart = dbSchedule?.startTime ?? currentSchedule?.startTime ?? "";
-    final existingEnd = dbSchedule?.endTime ?? currentSchedule?.endTime ?? "";
-
+    String migratedShifts = jsonEncode(dbSchedule?.getShiftsList() ?? currentSchedule?.getShiftsList() ?? []);
     // 💡 根據 isIncome 決定要撈哪個清單
     List<Map<String, dynamic>> currentList = isIncome 
         ? (dbSchedule?.getIncomeList() ?? currentSchedule?.getIncomeList() ?? [])
@@ -147,13 +220,14 @@ class ScheduleController extends ChangeNotifier {
     // 💡 根據 isIncome 決定要更新哪個欄位，另一個欄位保留舊值
     final updatedSchedule = ScheduleModel(
       date: date,
-      position: existingPosition,
-      startTime: existingStart,
-      endTime: existingEnd,
+      position: "",
+      startTime: "",
+      endTime: "",
       expenseAmount: isIncome ? (dbSchedule?.expenseAmount ?? 0) : totalAmount,
       expenseNote: isIncome ? (dbSchedule?.expenseNote ?? "[]") : jsonNoteString,
       incomeAmount: isIncome ? totalAmount : (dbSchedule?.incomeAmount ?? 0),
       incomeNote: isIncome ? jsonNoteString : (dbSchedule?.incomeNote ?? "[]"),
+      shiftsNote: migratedShifts,
     );
 
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
@@ -185,9 +259,9 @@ class ScheduleController extends ChangeNotifier {
 
     final updatedSchedule = ScheduleModel(
       date: date,
-      position: schedule.position,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
+      position: "",
+      startTime: "",
+      endTime: "",
       expenseAmount: isIncome ? schedule.expenseAmount : totalAmount,
       expenseNote: isIncome ? schedule.expenseNote : jsonNoteString,
       incomeAmount: isIncome ? totalAmount : schedule.incomeAmount,
@@ -219,16 +293,18 @@ class ScheduleController extends ChangeNotifier {
 
     int totalAmount = currentList.fold(0, (sum, item) => sum + (item['amount'] as int));
     String jsonNoteString = jsonEncode(currentList);
+    String migratedShifts = jsonEncode(schedule.getShiftsList());
 
     final updatedSchedule = ScheduleModel(
       date: date,
-      position: schedule.position,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
+      position: "",
+      startTime: "",
+      endTime: "",
       expenseAmount: isIncome ? schedule.expenseAmount : totalAmount,
       expenseNote: isIncome ? schedule.expenseNote : jsonNoteString,
       incomeAmount: isIncome ? totalAmount : schedule.incomeAmount,
       incomeNote: isIncome ? jsonNoteString : schedule.incomeNote,
+      shiftsNote: migratedShifts,
     );
 
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);
@@ -269,18 +345,36 @@ class ScheduleController extends ChangeNotifier {
         final String date = item['date'] ?? '';
         if (date.isEmpty) continue;
 
-        //  檢查資料庫那一天原本有沒有資料。若有，要保留原本的「記帳消費金額」，才不會把記帳洗掉 
+        //  1. 抓取資料庫那一天原本的資料
         final existing = await _dbHelper.getScheduleByDate(date);
-        final int expense = existing?.expenseAmount ?? 0;
-        final String note = existing?.expenseNote ?? "";
+        
+        //  2. 嚴格保留所有的「記帳、收入」資料，才不會被洗掉
+        final int expenseAmount = existing?.expenseAmount ?? 0;
+        final String expenseNote = existing?.expenseNote ?? "[]";
+        final int incomeAmount = existing?.incomeAmount ?? 0;
+        final String incomeNote = existing?.incomeNote ?? "[]";
 
+        //  3. 取出那一天「已經存在的排班陣列」
+        List<Map<String, dynamic>> currentShifts = existing?.getShiftsList() ?? [];
+
+        //  4. 把 AI 辨識到的新班表，加入到陣列中！
+        currentShifts.add({
+          'position': item['position'] ?? '打工班',
+          'start_time': item['start_time'] ?? '17:00',
+          'end_time': item['end_time'] ?? '22:00',
+        });
+
+        //  5. 重新打包存入資料庫
         final schedule = ScheduleModel(
           date: date,
-          position: item['position'] ?? '打工班',
-          startTime: item['start_time'] ?? '17:00',
-          endTime: item['end_time'] ?? '22:00',
-          expenseAmount: expense,
-          expenseNote: note,
+          position: "", 
+          startTime: "",
+          endTime: "",
+          expenseAmount: expenseAmount,
+          expenseNote: expenseNote,
+          incomeAmount: incomeAmount,
+          incomeNote: incomeNote,
+          shiftsNote: jsonEncode(currentShifts), // 🚀 關鍵：把更新後的陣列寫入
         );
 
         // 寫入本地資料庫 

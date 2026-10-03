@@ -9,6 +9,7 @@ class ScheduleModel {
   final String expenseNote;    // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
   final int incomeAmount;      // 當日進帳總額（自動加總後的結果）
   final String incomeNote;     // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
+  final String shiftsNote;
 
   ScheduleModel({
     required this.date,
@@ -18,7 +19,8 @@ class ScheduleModel {
     this.expenseAmount = 0,
     this.expenseNote = "[]",
     this.incomeAmount = 0,    
-    this.incomeNote = "[]",  
+    this.incomeNote = "[]", 
+    this.shiftsNote = "[]", 
   });
 
   // 📥 將資料庫查出來的 Map 轉換成 Dart 物件
@@ -32,6 +34,7 @@ class ScheduleModel {
       expenseNote: map['expense_note'] as String? ?? "[]",
       incomeAmount: map['income_amount'] as int? ?? 0, 
       incomeNote: map['income_note'] as String? ?? "[]",
+      shiftsNote: map['shifts_note'] as String? ?? "[]",
     );
   }
 
@@ -46,6 +49,7 @@ class ScheduleModel {
       'expense_note': expenseNote,
       'income_amount': incomeAmount, 
       'income_note': incomeNote,
+      'shifts_note': shiftsNote,
     };
   }
 
@@ -67,10 +71,28 @@ class ScheduleModel {
     }
   }
 
-  // 💡 新增：解析收入 JSON
+  // 解析收入 JSON
   List<Map<String, dynamic>> getIncomeList() {
     try {
       return List<Map<String, dynamic>>.from(jsonDecode(incomeNote));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 解析排班 JSON，並自動相容舊版單一排班資料
+  List<Map<String, dynamic>> getShiftsList() {
+    try {
+      List<Map<String, dynamic>> list = List<Map<String, dynamic>>.from(jsonDecode(shiftsNote));
+      // 如果新版 JSON 是空的，但舊版欄位有資料，就自動幫它包裝成第一筆班表！
+      if (list.isEmpty && position.isNotEmpty && startTime.isNotEmpty) {
+        return [{
+          'position': position,
+          'start_time': startTime,
+          'end_time': endTime,
+        }];
+      }
+      return list;
     } catch (e) {
       return [];
     }
