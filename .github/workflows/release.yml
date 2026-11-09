@@ -1,0 +1,69 @@
+name: Build & Release ShiftOx APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Restore Gemini API Key
+        run: |
+          echo "// 🔑 由 GitHub Actions 自動注入的金鑰配置" > lib/services/api_keys.dart
+          echo "const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';" >> lib/services/api_keys.dart
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Rename APK with App Name and Version
+        id: rename_apk
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -n 1 | awk '{print $2}' | cut -d'+' -f1)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          APK_NAME="ShiftOx-v${VERSION}.apk"
+          echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+          cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/${APK_NAME}"
+          echo "Renamed APK to ${APK_NAME}"
+
+      - name: Upload Artifact (Summary Page Download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShiftOx-APK
+          path: build/app/outputs/flutter-apk/${{ env.APK_NAME }}
+
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/${{ env.APK_NAME }}
+          name: Release v${{ env.VERSION }}
+          tag_name: ${{ github.ref_name != 'main' && github.ref_name || format('v{0}', env.VERSION) }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
