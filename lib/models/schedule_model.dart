@@ -8,8 +8,8 @@ class ScheduleModel {
   final int expenseAmount;     // 當日消費記帳總額（自動加總後的結果）
   final String expenseNote;    // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
   final int incomeAmount;      // 當日進帳總額（自動加總後的結果）
-  final String incomeNote;     // 儲存多筆明細的 JSON 字串 (例如: [{"title":"午餐","amount":100}])
-  final String shiftsNote;
+  final String incomeNote;     // 儲存多筆收入明細的 JSON 字串 (例如: [{"title":"二手書","amount":200}])
+  final String shiftsNote;     // 儲存多筆排班的 JSON 字串 (例如: [{"position":"晚班","start_time":"17:00","end_time":"22:00"}])
 
   ScheduleModel({
     required this.date,

@@ -5,6 +5,7 @@ class FinanceCard extends StatelessWidget {
   final String content;
   final Color color;
   final String subText;
+  final double? width;
 
   const FinanceCard({
     super.key,
@@ -12,13 +13,14 @@ class FinanceCard extends StatelessWidget {
     required this.content,
     required this.color,
     this.subText = "",
+    this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      width: 165,
+      width: width,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface, // 💡 使用主題的表面顏色

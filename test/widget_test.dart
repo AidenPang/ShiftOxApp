@@ -1,30 +1,53 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:shiftox/main.dart';
+import 'package:shiftox/models/schedule_model.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ShiftOxApp());
+  group('ScheduleModel Tests', () {
+    test('ScheduleModel should correctly parse multiple shifts and transactions', () {
+      final model = ScheduleModel(
+        date: '2026-11-09',
+        position: '',
+        startTime: '',
+        endTime: '',
+        expenseAmount: 150,
+        expenseNote: '[{"title":"午餐","amount":100},{"title":"飲料","amount":50}]',
+        incomeAmount: 500,
+        incomeNote: '[{"title":"二手書","amount":500}]',
+        shiftsNote: '[{"position":"晚班","start_time":"17:00","end_time":"22:00"}]',
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      final expenses = model.getExpenseList();
+      final incomes = model.getIncomeList();
+      final shifts = model.getShiftsList();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      expect(expenses.length, 2);
+      expect(expenses[0]['title'], '午餐');
+      expect(expenses[0]['amount'], 100);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      expect(incomes.length, 1);
+      expect(incomes[0]['title'], '二手書');
+      expect(incomes[0]['amount'], 500);
+
+      expect(shifts.length, 1);
+      expect(shifts[0]['position'], '晚班');
+      expect(shifts[0]['start_time'], '17:00');
+      expect(shifts[0]['end_time'], '22:00');
+    });
+
+    test('ScheduleModel backward compatibility with legacy single shift', () {
+      final legacyModel = ScheduleModel(
+        date: '2026-07-08',
+        position: '盛飯',
+        startTime: '17:00',
+        endTime: '22:00',
+        shiftsNote: '[]',
+      );
+
+      final shifts = legacyModel.getShiftsList();
+      expect(shifts.length, 1);
+      expect(shifts[0]['position'], '盛飯');
+      expect(shifts[0]['start_time'], '17:00');
+      expect(shifts[0]['end_time'], '22:00');
+    });
   });
 }

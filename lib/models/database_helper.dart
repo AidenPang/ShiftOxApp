@@ -57,7 +57,7 @@ class DatabaseHelper {
         expense_amount INTEGER,
         expense_note TEXT,
         income_amount INTEGER DEFAULT 0,
-        income_note TEXT DEFAULT '[]'
+        income_note TEXT DEFAULT '[]',
         shifts_note TEXT DEFAULT '[]'
       )
     ''');

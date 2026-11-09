@@ -68,7 +68,7 @@ class ScheduleController extends ChangeNotifier {
   }
 
   // 📊 核心運算：計算整個月的薪資與記帳加總 
-  Future<void> calculateMonthlyStats(String yearMonth) async {
+  Future<void> calculateMonthlyStats(String yearMonth, {bool shouldNotify = false}) async {
     final List<ScheduleModel> monthlySchedules = await _dbHelper.getSchedulesByMonth(yearMonth);
     double totalHours = 0.0;
     int totalExpense = 0;
@@ -83,6 +83,9 @@ class ScheduleController extends ChangeNotifier {
     // 3. 預估薪資 = 總工時 * 時薪 
     monthlyTotalSalary = (totalHours * hourlyWage).round();
     monthlyTotalExpense = totalExpense;
+    if (shouldNotify) {
+      notifyListeners();
+    }
   }
 
   //  1. 取得單日「所有排班」的總工時
@@ -127,7 +130,6 @@ class ScheduleController extends ChangeNotifier {
       )
     );
     await loadScheduleByDate(date);
-    await calculateMonthlyStats(date.substring(0, 7));
   }
 
   // 💡 3. 修改單筆排班
@@ -159,7 +161,6 @@ class ScheduleController extends ChangeNotifier {
         )
       );
       await loadScheduleByDate(date);
-      await calculateMonthlyStats(date.substring(0, 7));
     }
   }
 
@@ -186,7 +187,6 @@ class ScheduleController extends ChangeNotifier {
         )
       );
       await loadScheduleByDate(date);
-      await calculateMonthlyStats(date.substring(0, 7));
     }
   }
 
@@ -256,6 +256,7 @@ class ScheduleController extends ChangeNotifier {
 
     int totalAmount = currentList.fold(0, (sum, item) => sum + (item['amount'] as int));
     String jsonNoteString = jsonEncode(currentList);
+    String migratedShifts = jsonEncode(schedule.getShiftsList());
 
     final updatedSchedule = ScheduleModel(
       date: date,
@@ -266,6 +267,7 @@ class ScheduleController extends ChangeNotifier {
       expenseNote: isIncome ? schedule.expenseNote : jsonNoteString,
       incomeAmount: isIncome ? totalAmount : schedule.incomeAmount,
       incomeNote: isIncome ? jsonNoteString : schedule.incomeNote,
+      shiftsNote: migratedShifts,
     );
 
     await _dbHelper.insertOrUpdateSchedule(updatedSchedule);

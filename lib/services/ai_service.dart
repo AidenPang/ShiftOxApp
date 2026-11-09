@@ -1,17 +1,18 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart'; // 💡 引入 Gemini SDK
+import 'api_keys.dart';
 
 class AIService {
-  // 🔑 請在此處填入你的 Gemini API Key
-  final String _geminiApiKey = "AQ.Ab8RN6LMlbHdmFp6ZfMqJobydkF0ftRT3GES_wrn-Y4msnmdxg"; 
+  // 🔑 自本地 api_keys.dart 載入私密金鑰（已加入 .gitignore，不納入 Git 追蹤）
+  final String _geminiApiKey = geminiApiKey; 
 
   /// 📸 核心任務：將傳入的圖片 Byte 送給 Gemini，解析出該日期「定」的班表
   Future<List<Map<String, dynamic>>> scanScheduleImage(Uint8List imageBytes, String targetYear) async {
     try {
-      // 1. 初始化 Gemini 3.5 Flash 引擎
+      // 1. 初始化 Gemini 3.6 Flash 引擎
       final model = GenerativeModel(
-        model: 'gemini-3.5-flash', 
+        model: 'gemini-3.6-flash', 
         apiKey: _geminiApiKey,
       );
 

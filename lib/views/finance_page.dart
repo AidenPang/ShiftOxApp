@@ -14,6 +14,7 @@ class FinancePage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         backgroundColor: const Color(0xFF2C2C2C),
         title: Text(isTarget ? "🎯 設定學費預留目標" : "💼 校正現有資金", style: const TextStyle(color: Colors.white)),
         content: TextField(

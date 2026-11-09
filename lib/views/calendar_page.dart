@@ -7,6 +7,8 @@ import 'widgets/dialogs.dart';
 import 'widgets/finance_card.dart';
 import 'widgets/monthly_stats_bar.dart';
 import 'widgets/expense_list_view.dart';
+import 'widgets/shift_list_view.dart';
+import 'widgets/income_summary_card.dart';
 
 class CalendarPage extends StatefulWidget {
   final ScheduleController controller; // 💡 接收外面傳進來的 Controller
@@ -99,19 +101,6 @@ class _CalendarPageState extends State<CalendarPage> {
                       }
                     },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.camera_alt_rounded),
-                    tooltip: "拍照識別班表",
-                    onPressed: () async {
-                      final results = await _controller.scanAndImportSchedule(context, ImageSource.gallery, dateString);
-                      if (results.isNotEmpty && context.mounted) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => ImportResultDialog(results: results),
-                        );
-                      }
-                    },
-                  ),
                 ],
               ),
               body: Stack(
@@ -141,7 +130,7 @@ class _CalendarPageState extends State<CalendarPage> {
                         onPageChanged: (focusedDay) {
                           _focusedDay = focusedDay;
                           String yearMonth = "${focusedDay.year}-${focusedDay.month.toString().padLeft(2, '0')}";
-                          _controller.calculateMonthlyStats(yearMonth);
+                          _controller.calculateMonthlyStats(yearMonth, shouldNotify: true);
                         },
                         onDaySelected: (selectedDay, focusedDay) {
                           setState(() {
@@ -169,163 +158,65 @@ class _CalendarPageState extends State<CalendarPage> {
                             children: [
                               Text("📅 日期：$dateString", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                               const SizedBox(height: 4),
-                              if (shiftList.isEmpty)
-                                const Text("🏃‍♂️ 今天放假！休息吧牛馬", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
-                              else
-                                ...shiftList.asMap().entries.map((entry) {
-                                  int index = entry.key;
-                                  var shift = entry.value;
-                                  return GestureDetector(
-                                    onTap: () {
-                                      // 點擊班表卡片，直接開啟「修改模式」的彈窗
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) => WorkShiftDialog(
-                                          controller: _controller,
-                                          dateStr: dateString,
-                                          existingShift: shift,
-                                          shiftIndex: index,
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text("🏃‍♂️ 崗位：${shift['position']}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                              const SizedBox(height: 4),
-                                              Text("⏰ ${shift['start_time']} ~ ${shift['end_time']}", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.edit, size: 18, color: Colors.grey),
-                                              const SizedBox(width: 12),
-                                              // 💡 加上刪除按鈕
-                                              GestureDetector(
-                                                onTap: () async {
-                                                  await _controller.deleteWorkShift(date: dateString, index: index);
-                                                },
-                                                child: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }),
+                              ShiftListView(
+                                shiftList: shiftList,
+                                dateString: dateString,
+                                controller: _controller,
+                              ),
                               const SizedBox(height: 12),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  FinanceCard(
-                                    title: "💰 今日草料 (預估薪資)",
-                                    content: "$todaySalary 元",
-                                    color: Theme.of(context).colorScheme.primary,
-                                    subText: "時薪 \$ ${_controller.hourlyWage} 元",
-                                  ),
-                                  GestureDetector(
-                                    onTap: () {
-                                      final expenses = _controller.currentSchedule?.getExpenseList() ?? [];
-                                      showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (context) => ExpenseListBottomSheet(
-                                          date: dateString,
-                                          expenses: expenses,
-                                          onDelete: (index) async {
-                                            await _controller.deleteTransaction(date: dateString, index: index, isIncome: false,);
-                                          },
-                                          onEdit: (index, newTitle, newAmount) async {
-                                            await _controller.editTransaction(
-                                              date: dateString,
-                                              index: index,
-                                              newTitle: newTitle,
-                                              newAmount: newAmount,
-                                              isIncome: false,
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
+                                  Expanded(
                                     child: FinanceCard(
-                                      title: "💸 今日銀兩 (消費加總)",
-                                      content: "$expenseAmount 元",
-                                      color: Theme.of(context).colorScheme.error,
-                                      subText: "共 ${expenseList.length} 筆明細 ❯",
+                                      title: "💰 今日草料 (預估薪資)",
+                                      content: "$todaySalary 元",
+                                      color: Theme.of(context).colorScheme.primary,
+                                      subText: "時薪 \$ ${_controller.hourlyWage} 元",
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        final expenses = _controller.currentSchedule?.getExpenseList() ?? [];
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (context) => ExpenseListBottomSheet(
+                                            date: dateString,
+                                            expenses: expenses,
+                                            onDelete: (index) async {
+                                              await _controller.deleteTransaction(date: dateString, index: index, isIncome: false,);
+                                            },
+                                            onEdit: (index, newTitle, newAmount) async {
+                                              await _controller.editTransaction(
+                                                date: dateString,
+                                                index: index,
+                                                newTitle: newTitle,
+                                                newAmount: newAmount,
+                                                isIncome: false,
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      },
+                                      child: FinanceCard(
+                                        title: "💸 今日銀兩 (消費加總)",
+                                        content: "$expenseAmount 元",
+                                        color: Theme.of(context).colorScheme.error,
+                                        subText: "共 ${expenseList.length} 筆明細 ❯",
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                              if (incomeList.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                GestureDetector(
-                                  onTap: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (context) => ExpenseListBottomSheet(
-                                        date: dateString,
-                                        expenses: incomeList,
-                                        onDelete: (index) async => await _controller.deleteTransaction(date: dateString, index: index, isIncome: true),
-                                        onEdit: (index, newTitle, newAmount) async => await _controller.editTransaction(date: dateString, index: index, newTitle: newTitle, newAmount: newAmount, isIncome: true),
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withAlpha(25), // 淡淡的綠色背景
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.green.withAlpha(70)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            const Text("🤑 今日額外進帳", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
-                                            Text("+\$ $incomeAmount", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
-                                          ],
-                                        ),
-                                        const Padding(
-                                          padding: EdgeInsets.symmetric(vertical: 8.0),
-                                          child: Divider(color: Colors.green, height: 1, thickness: 0.3),
-                                        ),
-                                        // 展開顯示所有的收入明細
-                                        ...incomeList.map((item) => Padding(
-                                          padding: const EdgeInsets.only(bottom: 4.0),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text("• ${item['title']}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
-                                              Text("+\$ ${item['amount']}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
-                                            ],
-                                          ),
-                                        )),
-                                        const SizedBox(height: 4),
-                                        const Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Text("點擊修改 ❯", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                        )
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ]
+                              IncomeSummaryCard(
+                                dateString: dateString,
+                                incomeAmount: incomeAmount,
+                                incomeList: incomeList,
+                                controller: _controller,
+                              ),
                             ],
                           ),
                         ),
