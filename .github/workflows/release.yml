@@ -6,6 +6,12 @@ on:
       - 'v*'
       - '[0-9]+.*'
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: '📝 本次版本更新說明 (若空白則優先讀取專案 RELEASE_NOTES.md)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -57,6 +63,18 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/${APK_NAME}"
           echo "Renamed APK to ${APK_NAME}"
 
+      - name: Prepare Release Notes
+        run: |
+          if [ -n "${{ github.event.inputs.release_notes }}" ]; then
+            echo "${{ github.event.inputs.release_notes }}" > RELEASE_BODY.md
+          elif [ -f RELEASE_NOTES.md ]; then
+            cat RELEASE_NOTES.md > RELEASE_BODY.md
+          else
+            echo "### 🚀 ShiftOx v${{ env.VERSION }} 發布" > RELEASE_BODY.md
+            echo "" >> RELEASE_BODY.md
+            echo "最新版牛馬日誌已編譯完成，歡迎下載更新！" >> RELEASE_BODY.md
+          fi
+
       - name: Upload Artifact (Summary Page Download)
         uses: actions/upload-artifact@v4
         with:
@@ -67,10 +85,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/app/outputs/flutter-apk/${{ env.APK_NAME }}
-          name: Release v${{ env.VERSION }}
+          name: ShiftOx v${{ env.VERSION }}
           tag_name: ${{ github.ref_name != 'main' && github.ref_name || format('v{0}', env.VERSION) }}
+          body_path: RELEASE_BODY.md
           draft: false
           prerelease: false
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
