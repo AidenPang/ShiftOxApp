@@ -101,6 +101,14 @@ class _CalendarPageState extends State<CalendarPage> {
                       }
                     },
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.cloud_sync_outlined),
+                    tooltip: "資料備份與還原",
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (context) => BackupDialog(controller: _controller),
+                    ),
+                  ),
                 ],
               ),
               body: Stack(

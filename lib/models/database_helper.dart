@@ -110,6 +110,13 @@ class DatabaseHelper {
     return List.generate(maps.length, (i) => ScheduleModel.fromMap(maps[i]));
   }
 
+  // 📦 查詢所有排班與記帳數據 (用於完整備份)
+  Future<List<ScheduleModel>> getAllSchedules() async {
+    final db = await instance.database;
+    final List<Map<String, dynamic>> maps = await db.query('schedules', orderBy: 'date ASC');
+    return List.generate(maps.length, (i) => ScheduleModel.fromMap(maps[i]));
+  }
+
   // 💰 讀取時薪
   Future<int> getHourlyWage() async {
     final db = await instance.database;
